@@ -22,8 +22,9 @@ const int mins = 15;
 void playSoundOpen()
 {
   int Sound[] = {NOTE_G4, NOTE_C5, NOTE_G5, NOTE_C6};
-  int SoundNoteDurations[] = {4, 6, 8, 12};
+  int SoundNoteDurations[] = {12, 8, 6, 4};
   playMelody(Sound, SoundNoteDurations, 4);
+  Serial.println("YOU NEED TO OPEN THE DOOR");
 }
 
 void playSoundClose()
@@ -31,6 +32,7 @@ void playSoundClose()
   int Sound[] = {NOTE_C6, NOTE_G5, NOTE_C5, NOTE_G4};
   int SoundNoteDurations[] = {12, 8, 6, 4};
   playMelody(Sound, SoundNoteDurations, 4);
+  Serial.println("YOU NEED TO CLOSE THE DOOR");
 }
 
 
@@ -74,17 +76,20 @@ int findClosestToPreferredTemperature(int tempA, int tempB)
 bool ShouldWindowOpen(int tempInside, int tempOutside)
 {
    //if open... done.. why we asking?
-   if (digitalRead(magnetPin) == LOW)
+   if (digitalRead(magnetPin) == HIGH)
    {
+    Serial.println("WE ARE ALREADY OPEN");
       return false;
    }
    //if outside is closest to the preferred temp... then we should open it.
    if (findClosestToPreferredTemperature(tempInside,tempOutside) == 1)
    {
+      Serial.println("We should open");
       return true;
    }
    else
    {
+      Serial.println("We should not open");
       return false;
    }
 }
@@ -98,17 +103,20 @@ bool ShouldWindowOpen(int tempInside, int tempOutside)
 bool ShouldWindowClose(int tempInside, int tempOutside)
 {
    //if closed.... done.. why we asking?
-   if (digitalRead(magnetPin) == HIGH)
+   if (digitalRead(magnetPin) == LOW)
    {
+      Serial.println("WE ARE ALREADY CLOSED");
       return false;
    }
    //if inside is closest to the preferred temp... then we should close it.
    if (findClosestToPreferredTemperature(tempInside,tempOutside) == 0)
    {
+      Serial.println("We should close");
       return true;
    }
    else
    {
+    Serial.println("We should not close");
       return false;
    }
 }
@@ -118,11 +126,14 @@ void setup() {
   dhtIndoor.begin();
   dhtOutdoor.begin();
   pinMode(alarmPin, OUTPUT);
-  pinMode(magnetPin, INPUT);
+  pinMode(magnetPin, INPUT_PULLUP);
+  Serial.begin(9600);
+  Serial.println("SETUP");
 
 }
 
 void loop() {
+  Serial.println("SENSING TEMPS");
   float indoorH = dhtIndoor.readHumidity();
   //true means fahrenheit
   float indoorTempF = dhtIndoor.readTemperature(true);
@@ -131,25 +142,44 @@ void loop() {
   //true means fahrenheit
   float outdoorTempF = dhtOutdoor.readTemperature(true); 
 
+
+
   float indoorHI = dhtIndoor.computeHeatIndex(indoorTempF, indoorH);
   float outdoorHI = dhtOutdoor.computeHeatIndex(outdoorTempF, outdoorH);
 
+
+  Serial.println("INSIDE");
+  Serial.print("TEMP: ");
+  Serial.println(indoorTempF);
+  Serial.print("HUMIDITY: ");
+  Serial.println(indoorH);
+  Serial.print("HI: ");
+  Serial.println(indoorHI);
+  
+  Serial.println("OUTSIDE");
+  Serial.print("TEMP: ");
+  Serial.println(outdoorTempF);
+  Serial.print("HUMIDITY: ");
+  Serial.println(outdoorH);
+    Serial.print("HI: ");
+  Serial.println(outdoorHI);
   if(ShouldWindowClose(indoorHI, outdoorHI))
-  {
-    playSoundOpen();
-  }
-  else if(ShouldWindowOpen(indoorHI, outdoorHI))
   {
     playSoundClose();
   }
+  else if(ShouldWindowOpen(indoorHI, outdoorHI))
+  {
+    playSoundOpen();
+  }
 
- delay(minutes*60000); //wait a little while between reads
+ delay(30* 60000); //wait a little while between reads
   
 }
 
 void playMelody(int *melody, int *noteDurations, int notesLength)
 {
-
+for(int num = 0; num < 10; num++)
+{
   for (int thisNote = 0; thisNote < notesLength; thisNote++) {
     int noteDuration = 1000 / noteDurations[thisNote];
     tone(alarmPin, melody[thisNote], noteDuration);
@@ -157,4 +187,5 @@ void playMelody(int *melody, int *noteDurations, int notesLength)
     delay(pauseBetweenNotes);
     noTone(alarmPin);
   }
+}
 }
