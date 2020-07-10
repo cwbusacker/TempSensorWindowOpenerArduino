@@ -1,4 +1,5 @@
 #include "DHT.h"
+#include <LiquidCrystal.h>
 
 #define DHTTYPE DHT11
 #define NOTE_G4  392
@@ -7,32 +8,34 @@
 #define NOTE_C6  1047
 
 /*SETTINGS*/
-const int preferredTemperature = 69;
+int preferredTemperature = 68;
 
 //pins
-const int TempInPin = 2;
-const int TempOutPin = 3;
-const int magnetPin = 4;
-const int alarmPin = 5;
+const int TempInPin = 52;
+const int TempOutPin = 22;
+const int magnetPin = 40;
+const int alarmPin = 50;
 
 //minutes between temperature readings
 const int mins = 15;
-/**********/
 
+
+//use an array of ints and play melody of ascending notes
 void playSoundOpen()
 {
   int Sound[] = {NOTE_G4, NOTE_C5, NOTE_G5, NOTE_C6};
   int SoundNoteDurations[] = {12, 8, 6, 4};
   playMelody(Sound, SoundNoteDurations, 4);
-  Serial.println("YOU NEED TO OPEN THE DOOR");
+
 }
 
+
+//use an array of ints and play melody of descending notes
 void playSoundClose()
 {
   int Sound[] = {NOTE_C6, NOTE_G5, NOTE_C5, NOTE_G4};
   int SoundNoteDurations[] = {12, 8, 6, 4};
   playMelody(Sound, SoundNoteDurations, 4);
-  Serial.println("YOU NEED TO CLOSE THE DOOR");
 }
 
 
@@ -56,6 +59,7 @@ int findClosestToPreferredTemperature(int tempA, int tempB)
    {
       distanceFromB *= -1;
    }
+   
    //make decision based off distances
    if (distanceFromA < distanceFromB)
    {
@@ -75,21 +79,27 @@ int findClosestToPreferredTemperature(int tempA, int tempB)
  ***********************************************************************/
 bool ShouldWindowOpen(int tempInside, int tempOutside)
 {
-   //if open... done.. why we asking?
+   //if open... done.. 
    if (digitalRead(magnetPin) == HIGH)
    {
-    Serial.println("WE ARE ALREADY OPEN");
       return false;
    }
-   //if outside is closest to the preferred temp... then we should open it.
-   if (findClosestToPreferredTemperature(tempInside,tempOutside) == 1)
+   else if(tempInside > preferredTemperature && tempOutside < preferredTemperature || 
+      tempInside < preferredTemperature && tempOutside > preferredTemperature)
    {
-      Serial.println("We should open");
+    //the window needs opened because the outdoor temperature will help us reach preferred temp
+    return true;
+   }
+   
+   //if outside is closest to the preferred temp... then we should open it.
+   else if (findClosestToPreferredTemperature(tempInside,tempOutside) == 1)
+   {
+   //   Serial.println("We should open");
       return true;
    }
    else
    {
-      Serial.println("We should not open");
+  //    Serial.println("We should not open");
       return false;
    }
 }
@@ -102,77 +112,76 @@ bool ShouldWindowOpen(int tempInside, int tempOutside)
  ***********************************************************************/
 bool ShouldWindowClose(int tempInside, int tempOutside)
 {
-   //if closed.... done.. why we asking?
+   //if closed.... done.
    if (digitalRead(magnetPin) == LOW)
    {
-      Serial.println("WE ARE ALREADY CLOSED");
       return false;
    }
-   //if inside is closest to the preferred temp... then we should close it.
-   if (findClosestToPreferredTemperature(tempInside,tempOutside) == 0)
+   else if(tempInside > preferredTemperature && tempOutside < preferredTemperature || 
+           tempInside < preferredTemperature && tempOutside > preferredTemperature)
    {
-      Serial.println("We should close");
+    //the outside temperature can help reach the preferred temperature because it's either
+      //a. warmer inside than the preffered temp AND colder outside than the preffered temp 
+      //OR
+      //b. colder inside than the preferred temp AND warmer outside than the preferred temp
+      //therefore, we should not close!
+    return false;
+   }
+   
+   //if inside is closest to the preferred temp... then we should close it.
+   else if (findClosestToPreferredTemperature(tempInside,tempOutside) == 0)
+   {
+      //we should close
       return true;
    }
    else
    {
-    Serial.println("We should not close");
+      //do not close
       return false;
    }
 }
 
-void setup() {
-  // put your setup code here, to run once:
+void setup()
+{
+  //setup the dht sensors
   dhtIndoor.begin();
   dhtOutdoor.begin();
+  
+  //setup the alarm and the magnetPin which checks to see if window is open or closed
   pinMode(alarmPin, OUTPUT);
   pinMode(magnetPin, INPUT_PULLUP);
-  Serial.begin(9600);
-  Serial.println("SETUP");
-
 }
 
 void loop() {
-  Serial.println("SENSING TEMPS");
+
+  //Dht SENSOR: https://learn.adafruit.com/dht
+  
+  //Read indoor temperature
   float indoorH = dhtIndoor.readHumidity();
-  //true means fahrenheit
   float indoorTempF = dhtIndoor.readTemperature(true);
 
+  //Read outdoor temperature
   float outdoorH = dhtOutdoor.readHumidity();
-  //true means fahrenheit
   float outdoorTempF = dhtOutdoor.readTemperature(true); 
 
-
-
+  //Converted everything to Heat indexes using the dht library
   float indoorHI = dhtIndoor.computeHeatIndex(indoorTempF, indoorH);
   float outdoorHI = dhtOutdoor.computeHeatIndex(outdoorTempF, outdoorH);
 
-
-  Serial.println("INSIDE");
-  Serial.print("TEMP: ");
-  Serial.println(indoorTempF);
-  Serial.print("HUMIDITY: ");
-  Serial.println(indoorH);
-  Serial.print("HI: ");
-  Serial.println(indoorHI);
   
-  Serial.println("OUTSIDE");
-  Serial.print("TEMP: ");
-  Serial.println(outdoorTempF);
-  Serial.print("HUMIDITY: ");
-  Serial.println(outdoorH);
-    Serial.print("HI: ");
-  Serial.println(outdoorHI);
+  
   if(ShouldWindowClose(indoorHI, outdoorHI))
   {
+    //notify the user to close the window
     playSoundClose();
   }
   else if(ShouldWindowOpen(indoorHI, outdoorHI))
   {
+    //notify the user to open the window
     playSoundOpen();
   }
 
- delay(30* 60000); //wait a little while between reads
+ delay(mins*60*1000);
   
 }
 
